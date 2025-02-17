@@ -5,6 +5,19 @@ import (
 	"unicode"
 )
 
+var KEYWORDS map[string]TokenType
+
+func init() {
+	KEYWORDS = make(map[string]TokenType)
+	KEYWORDS["for"] = FOR
+	KEYWORDS["while"] = WHILE
+	KEYWORDS["else"] = ELSE
+	KEYWORDS["if"] = IF
+	KEYWORDS["return"] = RETURN
+	KEYWORDS["true"] = TRUE
+	KEYWORDS["false"] = FALSE
+}
+
 type Scanner struct {
 	Source  []rune
 	Tokens  []Token
@@ -19,7 +32,8 @@ func CreateScanner(source string) Scanner {
 		Source:  []rune(source),
 		Start:   0,
 		Current: 0,
-		Line:    0,
+		Line:    1,
+		Column:  1,
 	}
 }
 
@@ -95,6 +109,34 @@ func (scanner *Scanner) ScanToken() {
 		} else {
 			scanner.AddToken(SLASH)
 		}
+	case rune('='):
+		if scanner.PeekCurrent() == rune('=') {
+			scanner.Advance()
+			scanner.AddToken(EQUAL_EQ)
+		} else {
+			scanner.AddToken(EQUAL)
+		}
+	case rune('>'):
+		if scanner.PeekCurrent() == rune('=') {
+			scanner.Advance()
+			scanner.AddToken(GREATER_EQ)
+		} else {
+			scanner.AddToken(GREATER)
+		}
+	case rune('<'):
+		if scanner.PeekCurrent() == rune('=') {
+			scanner.Advance()
+			scanner.AddToken(LESS_EQ)
+		} else {
+			scanner.AddToken(LESS)
+		}
+	case rune('!'):
+		if scanner.PeekCurrent() == rune('=') {
+			scanner.Advance()
+			scanner.AddToken(BANG_EQ)
+		} else {
+			scanner.AddToken(BANG)
+		}
 	case rune('.'):
 		scanner.AddToken(DOT)
 	case rune(','):
@@ -108,7 +150,7 @@ func (scanner *Scanner) ScanToken() {
 	case rune('\r'):
 	case rune('\n'):
 		scanner.Line++
-		scanner.Column = 0
+		scanner.Column = 1
 	default:
 		if unicode.IsDigit(c) {
 			scanner.ScanNumber()
@@ -153,7 +195,15 @@ func (scanner *Scanner) ScanIdentifier() {
 		scanner.Advance()
 	}
 
-	scanner.AddTokenWithValue(IDENTIFIER, scanner.Source[scanner.Start:scanner.Current])
+	text := scanner.Source[scanner.Start:scanner.Current]
+	tokenType, ok := KEYWORDS[string(text)]
+	if ok {
+		tokenType = IDENTIFIER
+	} else {
+		tokenType = UNKOWN
+	}
+
+	scanner.AddTokenWithValue(tokenType, text)
 }
 
 func (scanner *Scanner) PeekCurrent() rune {

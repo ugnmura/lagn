@@ -28,8 +28,9 @@ func (client Lagn) error(line int, message string) {
 func (client Lagn) run(line string) {
 	scanner := core.CreateScanner(line)
 	scanner.ScanTokens()
-	fmt.Println(scanner.Tokens)
-	fmt.Println(line)
+	parser := core.CreateParser(scanner.Tokens)
+	expr := parser.Parse()
+	fmt.Println(expr)
 }
 
 func (client Lagn) runFile() {
