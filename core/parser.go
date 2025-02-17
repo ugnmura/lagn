@@ -21,6 +21,20 @@ func (parser *Parser) Parse() Expr {
 }
 
 func (parser *Parser) expression() Expr {
+	return parser.assignment()
+}
+
+func (parser *Parser) assignment() Expr {
+	if parser.match(IDENTIFIER) {
+		name := parser.tokens[parser.current-1]
+		for parser.match(EQUAL) {
+			expr := parser.assignment()
+			return AssignExpr{
+				name: name,
+				expr: expr,
+			}
+		}
+	}
 	return parser.equality()
 }
 
@@ -101,7 +115,7 @@ func (parser *Parser) unary() Expr {
 }
 
 func (parser *Parser) primary() Expr {
-	if parser.match(NUMBER, STRING, TRUE, FALSE) {
+	if parser.match(IDENTIFIER, NUMBER, STRING, TRUE, FALSE) {
 		return LiteralExpr{
 			value: parser.tokens[parser.current-1],
 		}

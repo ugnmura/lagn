@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"strconv"
 	"unicode"
 )
 
@@ -44,7 +45,7 @@ func (scanner *Scanner) AddToken(token TokenType) {
 	})
 }
 
-func (scanner *Scanner) AddTokenWithValue(token TokenType, value []rune) {
+func (scanner *Scanner) AddTokenWithValue(token TokenType, value TokenValue) {
 	scanner.Tokens = append(scanner.Tokens, Token{
 		Type:  token,
 		Line:  scanner.Line,
@@ -173,7 +174,8 @@ func (scanner *Scanner) ScanNumber() {
 		}
 	}
 
-	scanner.AddTokenWithValue(NUMBER, scanner.Source[scanner.Start:scanner.Current])
+	value, _ := strconv.ParseFloat(string(scanner.Source[scanner.Start:scanner.Current]), 64)
+	scanner.AddTokenWithValue(NUMBER, value)
 }
 
 func (scanner *Scanner) ScanString() {
@@ -187,7 +189,7 @@ func (scanner *Scanner) ScanString() {
 	}
 
 	scanner.Advance()
-	scanner.AddTokenWithValue(STRING, scanner.Source[scanner.Start+1:scanner.Current-1])
+	scanner.AddTokenWithValue(STRING, string(scanner.Source[scanner.Start+1:scanner.Current-1]))
 }
 
 func (scanner *Scanner) ScanIdentifier() {
@@ -197,13 +199,11 @@ func (scanner *Scanner) ScanIdentifier() {
 
 	text := scanner.Source[scanner.Start:scanner.Current]
 	tokenType, ok := KEYWORDS[string(text)]
-	if ok {
+	if !ok {
 		tokenType = IDENTIFIER
-	} else {
-		tokenType = UNKOWN
 	}
 
-	scanner.AddTokenWithValue(tokenType, text)
+	scanner.AddTokenWithValue(tokenType, string(text))
 }
 
 func (scanner *Scanner) PeekCurrent() rune {

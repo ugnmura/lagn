@@ -5,6 +5,7 @@ import (
 )
 
 type TokenType int
+type TokenValue interface{}
 
 const (
 	LEFT_PAREN TokenType = iota
@@ -89,16 +90,19 @@ func init() {
 
 type Token struct {
 	Type  TokenType
-	Value []rune
+	Value TokenValue
 	Line  int
 }
 
 func (token Token) String() string {
-	if len(token.Value) == 0 {
+	if token.Value == nil {
 		return token.Type.String()
 	}
 	if token.Type == STRING {
-		return fmt.Sprintf("%q", string(token.Value))
+		return fmt.Sprintf("%q", token.Value.(string))
 	}
-	return string(token.Value)
+	if token.Type == NUMBER {
+		return fmt.Sprintf("%v", token.Value.(float64))
+	}
+	return token.Value.(string)
 }

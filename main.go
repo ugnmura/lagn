@@ -30,7 +30,7 @@ func (client Lagn) run(line string) {
 	scanner.ScanTokens()
 	parser := core.CreateParser(scanner.Tokens)
 	expr := parser.Parse()
-	fmt.Println(expr)
+	fmt.Println(expr.Interpret())
 }
 
 func (client Lagn) runFile() {
