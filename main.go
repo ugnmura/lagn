@@ -29,8 +29,13 @@ func (client Lagn) run(line string, environment map[string]interface{}) {
 	scanner := core.CreateScanner(line)
 	scanner.ScanTokens()
 	parser := core.CreateParser(scanner.Tokens)
-	expr := parser.Parse()
-	fmt.Println(expr.Interpret(environment))
+	program := parser.Parse()
+
+	var output interface{}
+	for _, expr := range program {
+		output = expr.Interpret(environment)
+	}
+	fmt.Println(output)
 }
 
 func (client Lagn) runFile() {

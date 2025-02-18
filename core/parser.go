@@ -16,15 +16,15 @@ func CreateParser(tokens []Token) Parser {
 	}
 }
 
-func (parser *Parser) Parse() Expr {
-	var expr Expr = InvalidExpr{}
+func (parser *Parser) Parse() []Expr {
+	var program []Expr = []Expr{}
 
 	for !parser.isAtEnd() {
-		expr = parser.expression()
+		program = append(program, parser.expression())
 		parser.consume(SEMI, "Expected ; after expression")
 	}
 
-	return expr
+	return program
 }
 
 func (parser *Parser) expression() Expr {
