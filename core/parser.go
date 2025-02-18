@@ -16,42 +16,59 @@ func CreateParser(tokens []Token) Parser {
 	}
 }
 
-func (parser *Parser) Parse() []Expr {
+func (parser *Parser) Parse() ([]Expr, error) {
 	var program []Expr = []Expr{}
 
 	for !parser.isAtEnd() {
-		program = append(program, parser.expression())
-		parser.consume(SEMI, "Expected ; after expression")
+		expr, err := parser.expression()
+		if err != nil {
+			return nil, err
+		}
+		program = append(program, expr)
+		_, err = parser.consume(SEMI, "Expected ; after expression")
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	return program
+	return program, nil
 }
 
-func (parser *Parser) expression() Expr {
+func (parser *Parser) expression() (Expr, error) {
 	return parser.assignment()
 }
 
-func (parser *Parser) assignment() Expr {
+func (parser *Parser) assignment() (Expr, error) {
 	if parser.match(IDENTIFIER) {
 		name := parser.tokens[parser.current-1]
 		for parser.match(EQUAL) {
-			expr := parser.assignment()
+			expr, err := parser.assignment()
+			if err != nil {
+				return nil, err
+			}
+
 			return AssignExpr{
 				name: name,
 				expr: expr,
-			}
+			}, nil
 		}
 		parser.current--
 	}
 	return parser.equality()
 }
 
-func (parser *Parser) equality() Expr {
-	expr := parser.comparison()
+func (parser *Parser) equality() (Expr, error) {
+	expr, err := parser.comparison()
+	if err != nil {
+		return nil, err
+	}
 
 	for parser.match(EQUAL_EQ, BANG_EQ) {
 		operator := parser.tokens[parser.current-1]
-		rightExpr := parser.comparison()
+		rightExpr, err := parser.comparison()
+		if err != nil {
+			return nil, err
+		}
 		expr = BinaryExpr{
 			operator:  operator,
 			rightExpr: rightExpr,
@@ -59,15 +76,21 @@ func (parser *Parser) equality() Expr {
 		}
 	}
 
-	return expr
+	return expr, nil
 }
 
-func (parser *Parser) comparison() Expr {
-	expr := parser.term()
+func (parser *Parser) comparison() (Expr, error) {
+	expr, err := parser.term()
+	if err != nil {
+		return nil, err
+	}
 
 	for parser.match(GREATER, GREATER_EQ, LESS, LESS_EQ) {
 		operator := parser.tokens[parser.current-1]
-		rightExpr := parser.comparison()
+		rightExpr, err := parser.comparison()
+		if err != nil {
+			return nil, err
+		}
 		expr = BinaryExpr{
 			operator:  operator,
 			rightExpr: rightExpr,
@@ -75,15 +98,21 @@ func (parser *Parser) comparison() Expr {
 		}
 	}
 
-	return expr
+	return expr, nil
 }
 
-func (parser *Parser) term() Expr {
-	expr := parser.factor()
+func (parser *Parser) term() (Expr, error) {
+	expr, err := parser.factor()
+	if err != nil {
+		return nil, err
+	}
 
 	for parser.match(PLUS, MINUS) {
 		operator := parser.tokens[parser.current-1]
-		rightExpr := parser.factor()
+		rightExpr, err := parser.factor()
+		if err != nil {
+			return nil, err
+		}
 		expr = BinaryExpr{
 			operator:  operator,
 			rightExpr: rightExpr,
@@ -91,15 +120,21 @@ func (parser *Parser) term() Expr {
 		}
 	}
 
-	return expr
+	return expr, nil
 }
 
-func (parser *Parser) factor() Expr {
-	expr := parser.unary()
+func (parser *Parser) factor() (Expr, error) {
+	expr, err := parser.unary()
+	if err != nil {
+		return nil, err
+	}
 
 	for parser.match(STAR, SLASH) {
 		operator := parser.tokens[parser.current-1]
-		rightExpr := parser.unary()
+		rightExpr, err := parser.unary()
+		if err != nil {
+			return nil, err
+		}
 		expr = BinaryExpr{
 			operator:  operator,
 			rightExpr: rightExpr,
@@ -107,38 +142,51 @@ func (parser *Parser) factor() Expr {
 		}
 	}
 
-	return expr
+	return expr, nil
 }
 
-func (parser *Parser) unary() Expr {
+func (parser *Parser) unary() (Expr, error) {
 	if parser.match(BANG, MINUS) {
-		expr := parser.unary()
+		expr, err := parser.unary()
+		if err != nil {
+			return nil, err
+		}
 		return UnaryExpr{
 			operator: parser.tokens[parser.current-1],
 			expr:     expr,
-		}
+		}, nil
 	}
 
-	return parser.primary()
+	expr, err := parser.primary()
+	if err != nil {
+		return nil, err
+	}
+	return expr, nil
 }
 
-func (parser *Parser) primary() Expr {
+func (parser *Parser) primary() (Expr, error) {
 	if parser.match(IDENTIFIER, NUMBER, STRING, TRUE, FALSE) {
 		return LiteralExpr{
 			value: parser.tokens[parser.current-1],
-		}
+		}, nil
 	}
 
 	if parser.match(LEFT_PAREN) {
-		expr := parser.expression()
-		parser.consume(RIGHT_PAREN, "Expected ')' after expression")
+		expr, err := parser.expression()
+		if err != nil {
+			return nil, err
+		}
+		_, err = parser.consume(RIGHT_PAREN, "Expected ')' after expression")
+		if err != nil {
+			return nil, err
+		}
+
 		return GroupingExpr{
 			expr: expr,
-		}
+		}, nil
 	}
 
-	fmt.Printf("[ERROR] Syntax Error at Line %d\n", parser.tokens[parser.current].Line)
-	return InvalidExpr{}
+	return nil, fmt.Errorf("[ERROR] Syntax Error at Line %d\n", parser.tokens[parser.current].Line)
 }
 
 func (parser *Parser) match(tokenTypes ...TokenType) bool {
@@ -161,13 +209,12 @@ func (parser *Parser) advance() Token {
 	return result
 }
 
-func (parser *Parser) consume(tokenType TokenType, message string) Token {
+func (parser *Parser) consume(tokenType TokenType, message string) (Token, error) {
 	if parser.check(tokenType) {
-		return parser.advance()
+		return parser.advance(), nil
 	}
 
-	fmt.Printf("[ERROR] %s at Line %d\n", message, parser.tokens[parser.current].Line)
-	return parser.advance()
+	return parser.advance(), fmt.Errorf("[ERROR] %s at Line %d", message, parser.tokens[parser.current].Line)
 }
 
 func (parser Parser) check(tokenType TokenType) bool {

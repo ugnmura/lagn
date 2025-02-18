@@ -158,7 +158,7 @@ func (scanner *Scanner) ScanToken() {
 		} else if unicode.IsLetter(c) {
 			scanner.ScanIdentifier()
 		} else {
-			fmt.Printf("Unexpected Character at [%d|%d]\n", scanner.Line, scanner.Column)
+			fmt.Printf("[ERROR] Unexpected Character at Line %d, Column %d\n", scanner.Line, scanner.Column)
 		}
 	}
 }
@@ -184,7 +184,7 @@ func (scanner *Scanner) ScanString() {
 	}
 
 	if scanner.CurrentAtEnd() {
-		fmt.Printf("Unterminated String at [%d|%d]\n", scanner.Line, scanner.Column)
+		fmt.Printf("[ERROR] Unterminated String at Line %d, Column %d\n", scanner.Line, scanner.Column)
 		return
 	}
 
