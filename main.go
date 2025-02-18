@@ -17,7 +17,7 @@ func createLagn() Lagn {
 }
 
 func (client Lagn) report(line int, where string, message string) {
-	fmt.Printf("[line %d] %s: %s", line, where, message)
+	fmt.Printf("[Line %d] %s: %s", line, where, message)
 	client.hadError = true
 }
 
@@ -25,12 +25,12 @@ func (client Lagn) error(line int, message string) {
 	client.report(line, "", message)
 }
 
-func (client Lagn) run(line string) {
+func (client Lagn) run(line string, environment map[string]interface{}) {
 	scanner := core.CreateScanner(line)
 	scanner.ScanTokens()
 	parser := core.CreateParser(scanner.Tokens)
 	expr := parser.Parse()
-	fmt.Println(expr.Interpret())
+	fmt.Println(expr.Interpret(environment))
 }
 
 func (client Lagn) runFile() {
@@ -41,7 +41,8 @@ func (client Lagn) runFile() {
 		return
 	}
 
-	client.run(string(content))
+	environment := make(map[string]interface{})
+	client.run(string(content), environment)
 	if client.hadError {
 		os.Exit(65)
 	}
@@ -50,10 +51,11 @@ func (client Lagn) runFile() {
 func (client Lagn) runPrompt() {
 	bufScanner := bufio.NewScanner(os.Stdin)
 
+	environment := make(map[string]interface{})
 	fmt.Print("> ")
 	for bufScanner.Scan() {
 		line := bufScanner.Text()
-		client.run(line)
+		client.run(line, environment)
 		client.hadError = false
 		fmt.Print("> ")
 	}

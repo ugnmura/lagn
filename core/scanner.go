@@ -33,7 +33,7 @@ func CreateScanner(source string) Scanner {
 		Source:  []rune(source),
 		Start:   0,
 		Current: 0,
-		Line:    1,
+		Line:    0,
 		Column:  1,
 	}
 }

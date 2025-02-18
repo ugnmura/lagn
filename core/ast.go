@@ -6,7 +6,7 @@ import (
 
 type Expr interface {
 	fmt.Stringer
-	Interpret() interface{}
+	Interpret(environment map[string]interface{}) interface{}
 }
 
 type BinaryExpr struct {
@@ -61,41 +61,46 @@ func (expr InvalidExpr) String() string {
 	return "Invalid Expression"
 }
 
-func (expr AssignExpr) Interpret() interface{} {
-	return expr.expr.Interpret()
+func (expr AssignExpr) Interpret(environment map[string]interface{}) interface{} {
+	data := expr.expr.Interpret(environment)
+	environment[expr.name.String()] = data
+	return data
 }
 
-func (expr BinaryExpr) Interpret() interface{} {
-	left := expr.leftExpr.Interpret()
-	right := expr.rightExpr.Interpret()
+func (expr BinaryExpr) Interpret(environment map[string]interface{}) interface{} {
+	left := expr.leftExpr.Interpret(environment)
+	right := expr.rightExpr.Interpret(environment)
+	l, _ := left.(float64)
+	r, _ := right.(float64)
+
 	switch expr.operator.Type {
 	case PLUS:
-		return left.(float64) + right.(float64)
+		return l + r
 	case MINUS:
-		return left.(float64) - right.(float64)
+		return l - r
 	case STAR:
-		return left.(float64) * right.(float64)
+		return l * r
 	case SLASH:
-		return left.(float64) / right.(float64)
+		return l / r
 	case EQUAL_EQ:
 		return left == right
 	case BANG_EQ:
 		return left != right
 	case GREATER:
-		return left.(float64) > right.(float64)
+		return l > r
 	case GREATER_EQ:
-		return left.(float64) >= right.(float64)
+		return l >= r
 	case LESS:
-		return left.(float64) < right.(float64)
+		return l < r
 	case LESS_EQ:
-		return left.(float64) <= right.(float64)
+		return l <= r
 	default:
 		return nil
 	}
 }
 
-func (expr UnaryExpr) Interpret() interface{} {
-	res := expr.expr.Interpret()
+func (expr UnaryExpr) Interpret(environment map[string]interface{}) interface{} {
+	res := expr.expr.Interpret(environment)
 	switch expr.operator.Type {
 	case BANG:
 		return !res.(bool)
@@ -106,21 +111,23 @@ func (expr UnaryExpr) Interpret() interface{} {
 	}
 }
 
-func (expr GroupingExpr) Interpret() interface{} {
-	return expr.expr.Interpret()
+func (expr GroupingExpr) Interpret(environment map[string]interface{}) interface{} {
+	return expr.expr.Interpret(environment)
 }
 
-func (expr LiteralExpr) Interpret() interface{} {
+func (expr LiteralExpr) Interpret(environment map[string]interface{}) interface{} {
 	switch expr.value.Type {
 	case TRUE:
 		return true
 	case FALSE:
 		return false
+	case IDENTIFIER:
+		return environment[expr.value.String()]
 	default:
 		return expr.value.Value
 	}
 }
 
-func (expr InvalidExpr) Interpret() interface{} {
+func (expr InvalidExpr) Interpret(environment map[string]interface{}) interface{} {
 	return nil
 }

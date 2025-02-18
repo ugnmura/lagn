@@ -17,7 +17,14 @@ func CreateParser(tokens []Token) Parser {
 }
 
 func (parser *Parser) Parse() Expr {
-	return parser.expression()
+	var expr Expr = InvalidExpr{}
+
+	for !parser.isAtEnd() {
+		expr = parser.expression()
+		parser.consume(SEMI, "Expected ; after expression")
+	}
+
+	return expr
 }
 
 func (parser *Parser) expression() Expr {
@@ -34,6 +41,7 @@ func (parser *Parser) assignment() Expr {
 				expr: expr,
 			}
 		}
+		parser.current--
 	}
 	return parser.equality()
 }
@@ -158,7 +166,8 @@ func (parser *Parser) consume(tokenType TokenType, message string) Token {
 		return parser.advance()
 	}
 
-	panic(fmt.Sprintf("[ERROR] %s at Line %d", message, parser.tokens[parser.current].Line))
+	fmt.Printf("[ERROR] %s at Line %d\n", message, parser.tokens[parser.current].Line)
+	return parser.advance()
 }
 
 func (parser Parser) check(tokenType TokenType) bool {
