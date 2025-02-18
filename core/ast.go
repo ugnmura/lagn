@@ -4,9 +4,11 @@ import (
 	"fmt"
 )
 
+type Environment map[string]interface{}
+
 type Expr interface {
 	fmt.Stringer
-	Interpret(environment map[string]interface{}) interface{}
+	Interpret(environment Environment) interface{}
 }
 
 type BinaryExpr struct {
@@ -38,6 +40,24 @@ type AssignExpr struct {
 	expr Expr
 }
 
+type BlockExpr struct {
+	Expr
+	program []Expr
+}
+
+type IfExpr struct {
+	Expr
+	condition  Expr
+	thenBranch Expr
+	elseBranch Expr
+}
+
+type WhileExpr struct {
+	Expr
+	condition  Expr
+	loopBranch Expr
+}
+
 type InvalidExpr struct {
 	Expr
 }
@@ -60,14 +80,37 @@ func (expr LiteralExpr) String() string {
 func (expr InvalidExpr) String() string {
 	return "Invalid Expression"
 }
+func (expr BlockExpr) String() string {
+	res := ""
+	for _, expr := range expr.program {
+		res += "\t" + expr.String()
+	}
+	return res
+}
+func (expr IfExpr) String() string {
+	res := fmt.Sprintf("if (%v) {\n", expr.condition.String())
+	res += expr.thenBranch.String()
+	if expr.elseBranch != nil {
+		res += fmt.Sprintf("} else {\n")
+		res += expr.elseBranch.String()
+	}
+	res += "}"
+	return res
+}
+func (expr WhileExpr) String() string {
+	res := fmt.Sprintf("while (%v) {\n", expr.condition.String())
+	res += expr.loopBranch.String()
+	res += "}"
+	return res
+}
 
-func (expr AssignExpr) Interpret(environment map[string]interface{}) interface{} {
+func (expr AssignExpr) Interpret(environment Environment) interface{} {
 	data := expr.expr.Interpret(environment)
 	environment[expr.name.String()] = data
 	return data
 }
 
-func (expr BinaryExpr) Interpret(environment map[string]interface{}) interface{} {
+func (expr BinaryExpr) Interpret(environment Environment) interface{} {
 	left := expr.leftExpr.Interpret(environment)
 	right := expr.rightExpr.Interpret(environment)
 	l, _ := left.(float64)
@@ -99,7 +142,7 @@ func (expr BinaryExpr) Interpret(environment map[string]interface{}) interface{}
 	}
 }
 
-func (expr UnaryExpr) Interpret(environment map[string]interface{}) interface{} {
+func (expr UnaryExpr) Interpret(environment Environment) interface{} {
 	res := expr.expr.Interpret(environment)
 	switch expr.operator.Type {
 	case BANG:
@@ -111,11 +154,11 @@ func (expr UnaryExpr) Interpret(environment map[string]interface{}) interface{} 
 	}
 }
 
-func (expr GroupingExpr) Interpret(environment map[string]interface{}) interface{} {
+func (expr GroupingExpr) Interpret(environment Environment) interface{} {
 	return expr.expr.Interpret(environment)
 }
 
-func (expr LiteralExpr) Interpret(environment map[string]interface{}) interface{} {
+func (expr LiteralExpr) Interpret(environment Environment) interface{} {
 	switch expr.value.Type {
 	case TRUE:
 		return true
@@ -128,6 +171,32 @@ func (expr LiteralExpr) Interpret(environment map[string]interface{}) interface{
 	}
 }
 
-func (expr InvalidExpr) Interpret(environment map[string]interface{}) interface{} {
+func (expr InvalidExpr) Interpret(environment Environment) interface{} {
+	return nil
+}
+
+func (expr BlockExpr) Interpret(environment Environment) interface{} {
+	var res interface{}
+	for _, expr := range expr.program {
+		res = expr.Interpret(environment)
+	}
+	return res
+}
+
+func (expr IfExpr) Interpret(environment Environment) interface{} {
+	if expr.condition.Interpret(environment).(bool) {
+		return expr.thenBranch.Interpret(environment)
+	} else if expr.elseBranch != nil {
+		return expr.elseBranch.Interpret(environment)
+	}
+
+	return nil
+}
+
+func (expr WhileExpr) Interpret(environment Environment) interface{} {
+	for expr.condition.Interpret(environment).(bool) {
+		expr.loopBranch.Interpret(environment)
+	}
+
 	return nil
 }

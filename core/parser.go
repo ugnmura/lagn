@@ -24,17 +24,112 @@ func (parser *Parser) Parse() ([]Expr, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		program = append(program, expr)
-		_, err = parser.consume(SEMI, "Expected ; after expression")
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	return program, nil
 }
 
 func (parser *Parser) expression() (Expr, error) {
+	return parser.controlFlow()
+}
+
+func (parser *Parser) controlFlow() (Expr, error) {
+	if parser.match(IF) {
+		return parser.ifStatement()
+	}
+	if parser.match(WHILE) {
+		return parser.whileStatement()
+	}
+
+	return parser.block()
+}
+
+func (parser *Parser) ifStatement() (Expr, error) {
+	_, err := parser.consume(LEFT_PAREN, "Expect '(' after 'if'.")
+	if err != nil {
+		return nil, err
+	}
+
+	condition, err := parser.expression()
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = parser.consume(RIGHT_PAREN, "Expected ) after condition")
+	if err != nil {
+		return nil, err
+	}
+
+	thenBranch, err := parser.block()
+	if err != nil {
+		return nil, err
+	}
+
+	var elseBranch Expr
+	if parser.match(ELSE) {
+		elseBranch, err = parser.block()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return IfExpr{
+		condition:  condition,
+		thenBranch: thenBranch,
+		elseBranch: elseBranch,
+	}, nil
+}
+
+func (parser *Parser) whileStatement() (Expr, error) {
+	_, err := parser.consume(LEFT_PAREN, "Expect '(' after 'while'.")
+	if err != nil {
+		return nil, err
+	}
+
+	condition, err := parser.expression()
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = parser.consume(RIGHT_PAREN, "Expected ) after condition")
+	if err != nil {
+		return nil, err
+	}
+
+	loopBranch, err := parser.block()
+	if err != nil {
+		return nil, err
+	}
+
+	return WhileExpr{
+		condition:  condition,
+		loopBranch: loopBranch,
+	}, nil
+}
+
+func (parser *Parser) block() (Expr, error) {
+	if parser.match(LEFT_BRACE) {
+		program := []Expr{}
+		for !parser.match(RIGHT_BRACE) {
+			if parser.isAtEnd() {
+				return nil, fmt.Errorf("Expected } after block")
+			}
+
+			expr, err := parser.block()
+			if err != nil {
+				return nil, err
+			}
+
+			program = append(program, expr)
+		}
+
+		return BlockExpr{
+			program: program,
+		}, nil
+	}
+
 	return parser.assignment()
 }
 
@@ -42,7 +137,7 @@ func (parser *Parser) assignment() (Expr, error) {
 	if parser.match(IDENTIFIER) {
 		name := parser.tokens[parser.current-1]
 		for parser.match(EQUAL) {
-			expr, err := parser.assignment()
+			expr, err := parser.expression()
 			if err != nil {
 				return nil, err
 			}

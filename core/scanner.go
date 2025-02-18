@@ -68,7 +68,7 @@ func (scanner *Scanner) ScanToken() {
 	case rune(')'):
 		scanner.AddToken(RIGHT_PAREN)
 	case rune('{'):
-		scanner.AddToken(LEFT_PAREN)
+		scanner.AddToken(LEFT_BRACE)
 	case rune('}'):
 		scanner.AddToken(RIGHT_BRACE)
 	case rune('+'):
