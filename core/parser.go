@@ -42,6 +42,9 @@ func (parser *Parser) controlFlow() (Expr, error) {
 	if parser.match(WHILE) {
 		return parser.whileStatement()
 	}
+	if parser.match(FOR) {
+		return parser.forStatement()
+	}
 
 	return parser.block()
 }
@@ -106,6 +109,57 @@ func (parser *Parser) whileStatement() (Expr, error) {
 	return WhileExpr{
 		condition:  condition,
 		loopBranch: loopBranch,
+	}, nil
+}
+
+func (parser *Parser) forStatement() (Expr, error) {
+	_, err := parser.consume(LEFT_PAREN, "Expect '(' after 'for'.")
+	if err != nil {
+		return nil, err
+	}
+
+	initializer, err := parser.expression()
+	if err != nil {
+		return nil, err
+	}
+	_, err = parser.consume(SEMI, "Expected ; after condition")
+	if err != nil {
+		return nil, err
+	}
+
+	condition, err := parser.expression()
+	if err != nil {
+		return nil, err
+	}
+	_, err = parser.consume(SEMI, "Expected ; after condition")
+	if err != nil {
+		return nil, err
+	}
+
+	increment, err := parser.expression()
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = parser.consume(RIGHT_PAREN, "Expected ) after condition")
+	if err != nil {
+		return nil, err
+	}
+
+	loopBranch, err := parser.block()
+	if err != nil {
+		return nil, err
+	}
+
+	loopBranch = BlockExpr{
+		program: append(loopBranch.(BlockExpr).program, increment),
+	}
+
+	return BlockExpr{
+		program: append([]Expr{initializer}, WhileExpr{
+			condition:  condition,
+			loopBranch: loopBranch,
+		}),
 	}, nil
 }
 
