@@ -4,7 +4,44 @@ import (
 	"fmt"
 )
 
-type Environment map[string]any
+type Environment []map[string]any
+
+func (env *Environment) push(v map[string]any) Environment {
+	*env = append(*env, v)
+	return *env
+}
+
+func (env *Environment) pop() map[string]any {
+	l := len(*env)
+	if l == 0 {
+		panic("Cannot pop from an empty environment")
+	}
+
+	res := (*env)[l-1]
+	*env = (*env)[:l-1]
+	return res
+}
+
+func (env Environment) findVar(name string) (any, error) {
+	for _, e := range env {
+		if val, ok := e[name]; ok {
+			return val, nil
+		}
+	}
+	return nil, fmt.Errorf("Variable %s not found", name)
+}
+
+func (env *Environment) setVar(name string, value any) {
+	for _, e := range *env {
+		if _, ok := e[name]; ok {
+			e[name] = value
+			return
+		}
+	}
+
+	l := len(*env)
+	(*env)[l-1][name] = value
+}
 
 type Expr interface {
 	fmt.Stringer
@@ -106,7 +143,7 @@ func (expr WhileExpr) String() string {
 
 func (expr AssignExpr) Interpret(environment Environment) any {
 	data := expr.expr.Interpret(environment)
-	environment[expr.name.String()] = data
+	environment.setVar(expr.name.String(), data)
 	return data
 }
 
@@ -165,9 +202,9 @@ func (expr LiteralExpr) Interpret(environment Environment) any {
 	case FALSE:
 		return false
 	case IDENTIFIER:
-		v, ok := environment[expr.value.String()]
-		if !ok {
-			fmt.Println("Undefined variable:", expr.value.String())
+		v, err := environment.findVar(expr.value.String())
+		if err != nil {
+			fmt.Println(err)
 			return nil
 		}
 		return v
@@ -182,9 +219,11 @@ func (expr InvalidExpr) Interpret(environment Environment) any {
 
 func (expr BlockExpr) Interpret(environment Environment) any {
 	var res any
+	environment.push(make(map[string]any))
 	for _, expr := range expr.program {
 		res = expr.Interpret(environment)
 	}
+	environment.pop()
 	return res
 }
 

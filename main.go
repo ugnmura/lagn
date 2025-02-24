@@ -8,7 +8,7 @@ import (
 	"github.com/SushiWaUmai/lagn/core"
 )
 
-func run(line string, environment map[string]interface{}) error {
+func run(line string, environment core.Environment) error {
 	scanner := core.CreateScanner(line)
 	scanner.ScanTokens()
 	parser := core.CreateParser(scanner.Tokens)
@@ -17,7 +17,7 @@ func run(line string, environment map[string]interface{}) error {
 		return err
 	}
 
-	var output interface{}
+	var output any
 	for _, expr := range program {
 		output = expr.Interpret(environment)
 	}
@@ -34,7 +34,8 @@ func runFile() {
 		return
 	}
 
-	environment := make(map[string]interface{})
+	environment := make(core.Environment, 1)
+	environment[0] = make(map[string]any)
 	err = run(string(content), environment)
 	if err != nil {
 		fmt.Println(err)
@@ -44,7 +45,8 @@ func runFile() {
 func runPrompt() {
 	bufScanner := bufio.NewScanner(os.Stdin)
 
-	environment := make(map[string]interface{})
+	environment := make(core.Environment, 1)
+	environment[0] = make(map[string]any)
 	fmt.Print("> ")
 	for bufScanner.Scan() {
 		line := bufScanner.Text()
