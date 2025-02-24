@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 	"unicode"
 )
@@ -33,7 +34,7 @@ func CreateScanner(source string) Scanner {
 		Source:  []rune(source),
 		Start:   0,
 		Current: 0,
-		Line:    0,
+		Line:    1,
 		Column:  1,
 	}
 }
@@ -138,6 +139,13 @@ func (scanner *Scanner) ScanToken() {
 		} else {
 			scanner.AddToken(BANG)
 		}
+	case rune(':'):
+		if scanner.PeekCurrent() == rune('=') {
+			scanner.Advance()
+			scanner.AddToken(COLON_EQ)
+		} else {
+			scanner.AddToken(COLON)
+		}
 	case rune('.'):
 		scanner.AddToken(DOT)
 	case rune(','):
@@ -159,6 +167,7 @@ func (scanner *Scanner) ScanToken() {
 			scanner.ScanIdentifier()
 		} else {
 			fmt.Printf("[ERROR] Unexpected Character at Line %d, Column %d\n", scanner.Line, scanner.Column)
+			os.Exit(1)
 		}
 	}
 }

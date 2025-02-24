@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"os"
 )
 
 type Environment []map[string]any
@@ -23,22 +24,27 @@ func (env *Environment) pop() map[string]any {
 }
 
 func (env Environment) findVar(name string) (any, error) {
-	for _, e := range env {
-		if val, ok := e[name]; ok {
+	for i := len(env) - 1; i >= 0; i-- {
+		if val, ok := env[i][name]; ok {
 			return val, nil
 		}
 	}
+
 	return nil, fmt.Errorf("Variable %s not found", name)
 }
 
-func (env *Environment) setVar(name string, value any) {
-	for _, e := range *env {
-		if _, ok := e[name]; ok {
-			e[name] = value
-			return
+func (env *Environment) setVar(name string, value any) error {
+	for i := len(*env) - 1; i >= 0; i-- {
+		if _, ok := (*env)[i][name]; ok {
+			(*env)[i][name] = value
+			return nil
 		}
 	}
 
+	return fmt.Errorf("Variable %s not found", name)
+}
+
+func (env *Environment) declareVar(name string, value any) {
 	l := len(*env)
 	(*env)[l-1][name] = value
 }
@@ -73,8 +79,9 @@ type LiteralExpr struct {
 
 type AssignExpr struct {
 	Expr
-	name Token
-	expr Expr
+	name     Token
+	expr     Expr
+	operator Token
 }
 
 type BlockExpr struct {
@@ -100,7 +107,13 @@ type InvalidExpr struct {
 }
 
 func (expr AssignExpr) String() string {
-	return fmt.Sprintf("(%v = %v)", expr.name.String(), expr.expr.String())
+	op := ""
+	if expr.operator.Type == COLON_EQ {
+		op = ":="
+	} else if expr.operator.Type == EQUAL {
+		op = "="
+	}
+	return fmt.Sprintf("(%v %v %v)", expr.name.String(), op, expr.expr.String())
 }
 func (expr BinaryExpr) String() string {
 	return fmt.Sprintf("(%v %v %v)", expr.leftExpr.String(), expr.operator.String(), expr.rightExpr.String())
@@ -143,7 +156,19 @@ func (expr WhileExpr) String() string {
 
 func (expr AssignExpr) Interpret(environment Environment) any {
 	data := expr.expr.Interpret(environment)
-	environment.setVar(expr.name.String(), data)
+	if expr.operator.Type == COLON_EQ {
+		environment.declareVar(expr.name.String(), data)
+	} else if expr.operator.Type == EQUAL {
+		err := environment.setVar(expr.name.String(), data)
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+	} else {
+		err := fmt.Errorf("Invalid assignment operator: %s", expr.operator.Type)
+		fmt.Println(err)
+		os.Exit(1)
+	}
 	return data
 }
 
@@ -205,6 +230,7 @@ func (expr LiteralExpr) Interpret(environment Environment) any {
 		v, err := environment.findVar(expr.value.String())
 		if err != nil {
 			fmt.Println(err)
+			os.Exit(1)
 			return nil
 		}
 		return v

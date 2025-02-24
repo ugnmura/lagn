@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"slices"
 )
 
 type Parser struct {
@@ -171,7 +172,7 @@ func (parser *Parser) block() (Expr, error) {
 				return nil, fmt.Errorf("Expected } after block")
 			}
 
-			expr, err := parser.block()
+			expr, err := parser.expression()
 			if err != nil {
 				return nil, err
 			}
@@ -190,15 +191,17 @@ func (parser *Parser) block() (Expr, error) {
 func (parser *Parser) assignment() (Expr, error) {
 	if parser.match(IDENTIFIER) {
 		name := parser.tokens[parser.current-1]
-		for parser.match(EQUAL) {
+		for parser.match(EQUAL, COLON_EQ) {
+			operator := parser.tokens[parser.current-1]
 			expr, err := parser.expression()
 			if err != nil {
 				return nil, err
 			}
 
 			return AssignExpr{
-				name: name,
-				expr: expr,
+				name:     name,
+				expr:     expr,
+				operator: operator,
 			}, nil
 		}
 		parser.current--
@@ -339,12 +342,11 @@ func (parser *Parser) primary() (Expr, error) {
 }
 
 func (parser *Parser) match(tokenTypes ...TokenType) bool {
-	for _, tokenType := range tokenTypes {
-		if parser.tokens[parser.current].Type == tokenType {
-			parser.advance()
-			return true
-		}
+	if slices.Contains(tokenTypes, parser.tokens[parser.current].Type) {
+		parser.advance()
+		return true
 	}
+
 	return false
 }
 
