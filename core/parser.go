@@ -66,14 +66,14 @@ func (parser *Parser) ifStatement() (Expr, error) {
 		return nil, err
 	}
 
-	thenBranch, err := parser.block()
+	thenBranch, err := parser.expression()
 	if err != nil {
 		return nil, err
 	}
 
 	var elseBranch Expr
 	if parser.match(ELSE) {
-		elseBranch, err = parser.block()
+		elseBranch, err = parser.expression()
 		if err != nil {
 			return nil, err
 		}
@@ -102,7 +102,7 @@ func (parser *Parser) whileStatement() (Expr, error) {
 		return nil, err
 	}
 
-	loopBranch, err := parser.block()
+	loopBranch, err := parser.expression()
 	if err != nil {
 		return nil, err
 	}
@@ -147,13 +147,13 @@ func (parser *Parser) forStatement() (Expr, error) {
 		return nil, err
 	}
 
-	loopBranch, err := parser.block()
+	loopBranchContent, err := parser.expression()
 	if err != nil {
 		return nil, err
 	}
 
-	loopBranch = BlockExpr{
-		program: append(loopBranch.(BlockExpr).program, increment),
+	loopBranch := BlockExpr{
+		program: []Expr{loopBranchContent, increment},
 	}
 
 	return BlockExpr{
@@ -191,11 +191,24 @@ func (parser *Parser) block() (Expr, error) {
 func (parser *Parser) assignment() (Expr, error) {
 	if parser.match(IDENTIFIER) {
 		name := parser.tokens[parser.current-1]
-		for parser.match(EQUAL, COLON_EQ) {
+		for parser.match(EQUAL, COLON_EQ, PLUS_EQ, MINUS_EQ, STAR_EQ, SLASH_EQ, PERCENT_EQ) {
 			operator := parser.tokens[parser.current-1]
 			expr, err := parser.expression()
 			if err != nil {
 				return nil, err
+			}
+
+			switch operator.Type {
+			case PLUS_EQ:
+				return parser.assignDesugared(name, PLUS, expr, operator.Line), nil
+			case MINUS_EQ:
+				return parser.assignDesugared(name, MINUS, expr, operator.Line), nil
+			case STAR_EQ:
+				return parser.assignDesugared(name, STAR, expr, operator.Line), nil
+			case SLASH_EQ:
+				return parser.assignDesugared(name, SLASH, expr, operator.Line), nil
+			case PERCENT_EQ:
+				return parser.assignDesugared(name, PERCENT, expr, operator.Line), nil
 			}
 
 			return AssignExpr{
@@ -206,7 +219,75 @@ func (parser *Parser) assignment() (Expr, error) {
 		}
 		parser.current--
 	}
-	return parser.equality()
+	return parser.logicalOr()
+}
+
+func (parser *Parser) assignDesugared(name Token, operator TokenType, expr Expr, line int) AssignExpr {
+	return AssignExpr{
+		name: name,
+		expr: BinaryExpr{
+			operator: Token{
+				Type:  operator,
+				Value: "",
+				Line:  line,
+			},
+			leftExpr: LiteralExpr{
+				value: Token{
+					Type:  IDENTIFIER,
+					Value: name.Value,
+					Line:  line,
+				},
+			},
+			rightExpr: expr,
+		},
+		operator: Token{
+			Type: EQUAL, Value: "", Line: line,
+		},
+	}
+}
+
+func (parser *Parser) logicalOr() (Expr, error) {
+	expr, err := parser.logicalAnd()
+	if err != nil {
+		return nil, err
+	}
+
+	for parser.match(BAR_BAR) {
+		operator := parser.tokens[parser.current-1]
+		rightExpr, err := parser.logicalAnd()
+		if err != nil {
+			return nil, err
+		}
+		expr = BinaryExpr{
+			operator:  operator,
+			rightExpr: rightExpr,
+			leftExpr:  expr,
+		}
+	}
+
+	return expr, nil
+}
+
+func (parser *Parser) logicalAnd() (Expr, error) {
+	expr, err := parser.equality()
+	if err != nil {
+		return nil, err
+	}
+
+	for parser.match(AMP_AMP) {
+		operator := parser.tokens[parser.current-1]
+		rightExpr, err := parser.equality()
+		if err != nil {
+			return nil, err
+		}
+		expr = BinaryExpr{
+			operator:  operator,
+			rightExpr: rightExpr,
+			leftExpr:  expr,
+		}
+	}
+
+	return expr, nil
 }
 
 func (parser *Parser) equality() (Expr, error) {
@@ -281,7 +362,7 @@ func (parser *Parser) factor() (Expr, error) {
 		return nil, err
 	}
 
-	for parser.match(STAR, SLASH) {
+	for parser.match(STAR, SLASH, PERCENT) {
 		operator := parser.tokens[parser.current-1]
 		rightExpr, err := parser.unary()
 		if err != nil {
@@ -299,7 +380,7 @@ func (parser *Parser) factor() (Expr, error) {
 
 func (parser *Parser) unary() (Expr, error) {
 	if parser.match(BANG, MINUS) {
-		expr, err := parser.unary()
+		expr, err := parser.call()
 		if err != nil {
 			return nil, err
 		}
@@ -309,11 +390,60 @@ func (parser *Parser) unary() (Expr, error) {
 		}, nil
 	}
 
-	expr, err := parser.primary()
+	expr, err := parser.call()
 	if err != nil {
 		return nil, err
 	}
 	return expr, nil
+}
+
+func (parser *Parser) call() (Expr, error) {
+	expr, err := parser.primary()
+	if err != nil {
+		return nil, err
+	}
+
+	if parser.match(LEFT_PAREN) {
+		args, err := parser.finishCall()
+		if err != nil {
+			return nil, err
+		}
+
+		return CallExpr{
+			f:    expr,
+			args: args,
+		}, nil
+	}
+
+	return expr, nil
+}
+
+func (parser *Parser) finishCall() ([]Expr, error) {
+	var args []Expr
+
+	if !parser.check(RIGHT_PAREN) {
+		if parser.isAtEnd() {
+			return nil, fmt.Errorf("Expected ')' after call")
+		}
+
+		arg, err := parser.expression()
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, arg)
+
+		for parser.match(COMMA) {
+			arg, err := parser.expression()
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, arg)
+		}
+	}
+
+	parser.consume(RIGHT_PAREN, "Expected ')' after call")
+
+	return args, nil
 }
 
 func (parser *Parser) primary() (Expr, error) {

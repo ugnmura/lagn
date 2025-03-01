@@ -111,6 +111,13 @@ func (scanner *Scanner) ScanToken() {
 		} else {
 			scanner.AddToken(SLASH)
 		}
+	case rune('%'):
+		if scanner.PeekCurrent() == rune('=') {
+			scanner.Advance()
+			scanner.AddToken(PERCENT_EQ)
+		} else {
+			scanner.AddToken(PERCENT)
+		}
 	case rune('='):
 		if scanner.PeekCurrent() == rune('=') {
 			scanner.Advance()
@@ -145,6 +152,36 @@ func (scanner *Scanner) ScanToken() {
 			scanner.AddToken(COLON_EQ)
 		} else {
 			scanner.AddToken(COLON)
+		}
+	case rune('&'):
+		if scanner.PeekCurrent() == rune('&') {
+			scanner.Advance()
+			if scanner.PeekCurrent() == rune('=') {
+				scanner.Advance()
+				scanner.AddToken(AMP_AMP_EQ)
+			} else {
+				scanner.AddToken(AMP_AMP)
+			}
+		} else if scanner.PeekCurrent() == rune('=') {
+			scanner.Advance()
+			scanner.AddToken(AMP_EQ)
+		} else {
+			scanner.AddToken(AMP)
+		}
+	case rune('|'):
+		if scanner.PeekCurrent() == rune('|') {
+			scanner.Advance()
+			if scanner.PeekCurrent() == rune('=') {
+				scanner.Advance()
+				scanner.AddToken(BAR_BAR_EQ)
+			} else {
+				scanner.AddToken(BAR_BAR)
+			}
+		} else if scanner.PeekCurrent() == rune('=') {
+			scanner.Advance()
+			scanner.AddToken(BAR_EQ)
+		} else {
+			scanner.AddToken(BAR)
 		}
 	case rune('.'):
 		scanner.AddToken(DOT)
@@ -181,9 +218,13 @@ func (scanner *Scanner) ScanNumber() {
 		for unicode.IsDigit(scanner.PeekCurrent()) {
 			scanner.Advance()
 		}
+
+		value, _ := strconv.ParseFloat(string(scanner.Source[scanner.Start:scanner.Current]), 64)
+		scanner.AddTokenWithValue(NUMBER, value)
+		return
 	}
 
-	value, _ := strconv.ParseFloat(string(scanner.Source[scanner.Start:scanner.Current]), 64)
+	value, _ := strconv.ParseInt(string(scanner.Source[scanner.Start:scanner.Current]), 10, 64)
 	scanner.AddTokenWithValue(NUMBER, value)
 }
 

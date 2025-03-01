@@ -5,48 +5,14 @@ import (
 	"os"
 )
 
-type Environment []map[string]any
-
-func (env *Environment) push(v map[string]any) Environment {
-	*env = append(*env, v)
-	return *env
+type Function struct {
+	fmt.Stringer
+	Arity int
+	Call  func(args []any) (any, error)
 }
 
-func (env *Environment) pop() map[string]any {
-	l := len(*env)
-	if l == 0 {
-		panic("Cannot pop from an empty environment")
-	}
-
-	res := (*env)[l-1]
-	*env = (*env)[:l-1]
-	return res
-}
-
-func (env Environment) findVar(name string) (any, error) {
-	for i := len(env) - 1; i >= 0; i-- {
-		if val, ok := env[i][name]; ok {
-			return val, nil
-		}
-	}
-
-	return nil, fmt.Errorf("Variable %s not found", name)
-}
-
-func (env *Environment) setVar(name string, value any) error {
-	for i := len(*env) - 1; i >= 0; i-- {
-		if _, ok := (*env)[i][name]; ok {
-			(*env)[i][name] = value
-			return nil
-		}
-	}
-
-	return fmt.Errorf("Variable %s not found", name)
-}
-
-func (env *Environment) declareVar(name string, value any) {
-	l := len(*env)
-	(*env)[l-1][name] = value
+func (f Function) String() string {
+	return fmt.Sprintf("f(%v)", f.Arity)
 }
 
 type Expr interface {
@@ -106,6 +72,12 @@ type InvalidExpr struct {
 	Expr
 }
 
+type CallExpr struct {
+	Expr
+	f    Expr
+	args []Expr
+}
+
 func (expr AssignExpr) String() string {
 	op := ""
 	if expr.operator.Type == COLON_EQ {
@@ -153,6 +125,17 @@ func (expr WhileExpr) String() string {
 	res += "}"
 	return res
 }
+func (expr CallExpr) String() string {
+	res := fmt.Sprintf("%s(", expr.f.String())
+	for i, arg := range expr.args {
+		if i > 0 {
+			res += ", "
+		}
+		res += arg.String()
+	}
+	res += ")"
+	return res
+}
 
 func (expr AssignExpr) Interpret(environment Environment) any {
 	data := expr.expr.Interpret(environment)
@@ -173,32 +156,80 @@ func (expr AssignExpr) Interpret(environment Environment) any {
 }
 
 func (expr BinaryExpr) Interpret(environment Environment) any {
-	left := expr.leftExpr.Interpret(environment)
-	right := expr.rightExpr.Interpret(environment)
-	l, _ := left.(float64)
-	r, _ := right.(float64)
+	l := expr.leftExpr.Interpret(environment)
+	r := expr.rightExpr.Interpret(environment)
 
 	switch expr.operator.Type {
 	case PLUS:
-		return l + r
+		if leftInt, ok := l.(int64); ok {
+			if rightInt, ok := r.(int64); ok {
+				return leftInt + rightInt
+			}
+		}
+		return l.(float64) + r.(float64)
 	case MINUS:
-		return l - r
+		if leftInt, ok := l.(int64); ok {
+			if rightInt, ok := r.(int64); ok {
+				return leftInt - rightInt
+			}
+		}
+		return l.(float64) - r.(float64)
 	case STAR:
-		return l * r
+		if leftInt, ok := l.(int64); ok {
+			if rightInt, ok := r.(int64); ok {
+				return leftInt * rightInt
+			}
+		}
+		return l.(float64) * r.(float64)
 	case SLASH:
-		return l / r
+		if leftInt, ok := l.(int64); ok {
+			if rightInt, ok := r.(int64); ok {
+				return leftInt / rightInt
+			}
+		}
+		return l.(float64) / r.(float64)
+	case PERCENT:
+		return l.(int64) % r.(int64)
 	case EQUAL_EQ:
-		return left == right
+		return l == r
 	case BANG_EQ:
-		return left != right
+		return l != r
 	case GREATER:
-		return l > r
+		if leftInt, ok := l.(int64); ok {
+			if rightInt, ok := r.(int64); ok {
+				return leftInt > rightInt
+			}
+		}
+		return l.(float64) > r.(float64)
 	case GREATER_EQ:
-		return l >= r
+		if leftInt, ok := l.(int64); ok {
+			if rightInt, ok := r.(int64); ok {
+				return leftInt >= rightInt
+			}
+		}
+		return l.(float64) >= r.(float64)
 	case LESS:
-		return l < r
+		if leftInt, ok := l.(int64); ok {
+			if rightInt, ok := r.(int64); ok {
+				return leftInt < rightInt
+			}
+		}
+		return l.(float64) < r.(float64)
 	case LESS_EQ:
-		return l <= r
+		if leftInt, ok := l.(int64); ok {
+			if rightInt, ok := r.(int64); ok {
+				return leftInt <= rightInt
+			}
+		}
+		return l.(float64) <= r.(float64)
+	case BAR:
+		return l.(int64) | r.(int64)
+	case BAR_BAR:
+		return l.(bool) || r.(bool)
+	case AMP:
+		return l.(int64) & r.(int64)
+	case AMP_AMP:
+		return l.(bool) && r.(bool)
 	default:
 		return nil
 	}
@@ -210,6 +241,9 @@ func (expr UnaryExpr) Interpret(environment Environment) any {
 	case BANG:
 		return !res.(bool)
 	case MINUS:
+		if _, ok := res.(int64); ok {
+			return -res.(int64)
+		}
 		return -res.(float64)
 	default:
 		return nil
@@ -269,4 +303,32 @@ func (expr WhileExpr) Interpret(environment Environment) any {
 	}
 
 	return nil
+}
+
+func (expr CallExpr) Interpret(environment Environment) any {
+	f, err := environment.findVar(expr.f.String())
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+		return nil
+	}
+
+	function, ok := f.(Function)
+	if !ok {
+		fmt.Println("Expected function")
+		os.Exit(1)
+		return nil
+	}
+	args := []any{}
+
+	for _, arg := range expr.args {
+		args = append(args, arg.Interpret(environment))
+	}
+	value, err := function.Call(args)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+		return nil
+	}
+	return value
 }

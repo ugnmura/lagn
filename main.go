@@ -34,8 +34,7 @@ func runFile() {
 		return
 	}
 
-	environment := make(core.Environment, 1)
-	environment[0] = make(map[string]any)
+	environment := core.DefaultEnvironment()
 	err = run(string(content), environment)
 	if err != nil {
 		fmt.Println(err)
@@ -45,8 +44,7 @@ func runFile() {
 func runPrompt() {
 	bufScanner := bufio.NewScanner(os.Stdin)
 
-	environment := make(core.Environment, 1)
-	environment[0] = make(map[string]any)
+	environment := core.DefaultEnvironment()
 	fmt.Print("> ")
 	for bufScanner.Scan() {
 		line := bufScanner.Text()
