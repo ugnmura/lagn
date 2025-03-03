@@ -63,6 +63,7 @@ const (
 	IF
 	ELSE
 	RETURN
+  FUNCTION
 
 	TRUE
 	FALSE
@@ -82,7 +83,7 @@ var tokenTypeNames = [...]string{
 	"CIRCUM", "CIRCUM_EQ", "CIRCUM_CIRCUM", "CIRCUM_CIRCUM_EQ",
 	"BANG", "BANG_EQ", "EQUAL", "EQUAL_EQ", "GREATER", "GREATER_EQ", "LESS", "LESS_EQ",
 	"IDENTIFIER", "STRING", "NUMBER",
-	"FOR", "WHILE", "IF", "ELSE", "RETURN",
+	"FOR", "WHILE", "IF", "ELSE", "RETURN", "FUNCTION",
 	"TRUE", "FALSE",
 	"UNKOWN",
 	"EOF",

@@ -19,7 +19,10 @@ func run(line string, environment core.Environment) error {
 
 	var output any
 	for _, expr := range program {
-		output = expr.Interpret(environment)
+		output, err = expr.Interpret(environment)
+    if err != nil {
+      return err
+    }
 	}
 	fmt.Println(output)
 

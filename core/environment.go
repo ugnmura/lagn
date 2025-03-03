@@ -51,7 +51,7 @@ func DefaultEnvironment() Environment {
 	env[0] = make(map[string]any)
 	env[0]["print"] = Function{
 		Arity: 1,
-		Call: func(args []any) (any, error) {
+		Call: func(_ Environment, args []any) (any, error) {
 			fmt.Println(args[0])
 			return nil, nil
 		},

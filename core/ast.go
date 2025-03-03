@@ -2,13 +2,12 @@ package core
 
 import (
 	"fmt"
-	"os"
 )
 
 type Function struct {
 	fmt.Stringer
 	Arity int
-	Call  func(args []any) (any, error)
+	Call  func(env Environment, args []any) (any, error)
 }
 
 func (f Function) String() string {
@@ -17,7 +16,7 @@ func (f Function) String() string {
 
 type Expr interface {
 	fmt.Stringer
-	Interpret(environment Environment) any
+	Interpret(environment Environment) (any, error)
 }
 
 type BinaryExpr struct {
@@ -68,14 +67,18 @@ type WhileExpr struct {
 	loopBranch Expr
 }
 
-type InvalidExpr struct {
-	Expr
-}
 
 type CallExpr struct {
 	Expr
 	f    Expr
 	args []Expr
+}
+
+type FnDeclExpr struct {
+  Expr
+  name Token
+	args []Token
+  program Expr
 }
 
 func (expr AssignExpr) String() string {
@@ -98,9 +101,6 @@ func (expr GroupingExpr) String() string {
 }
 func (expr LiteralExpr) String() string {
 	return expr.value.String()
-}
-func (expr InvalidExpr) String() string {
-	return "Invalid Expression"
 }
 func (expr BlockExpr) String() string {
 	res := ""
@@ -136,199 +136,312 @@ func (expr CallExpr) String() string {
 	res += ")"
 	return res
 }
+func (expr FnDeclExpr) String() string {
+	res := fmt.Sprintf("%s = (", expr.name.String())
+	for i, arg := range expr.args {
+		if i > 0 {
+			res += ", "
+		}
+		res += arg.String()
+	}
+	res += ") => \n"
+  res += expr.program.String()
+	return res
+}
 
-func (expr AssignExpr) Interpret(environment Environment) any {
-	data := expr.expr.Interpret(environment)
+func (expr AssignExpr) Interpret(environment Environment) (any, error) {
+	data, err := expr.expr.Interpret(environment)
+  if err != nil {
+    return nil, err
+  }
 	if expr.operator.Type == COLON_EQ {
 		environment.declareVar(expr.name.String(), data)
 	} else if expr.operator.Type == EQUAL {
 		err := environment.setVar(expr.name.String(), data)
 		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
+      return nil, fmt.Errorf("Invalid assignment operator: %s", expr.operator.Type)
 		}
 	} else {
-		err := fmt.Errorf("Invalid assignment operator: %s", expr.operator.Type)
-		fmt.Println(err)
-		os.Exit(1)
+		return nil, fmt.Errorf("Invalid assignment operator: %s", expr.operator.Type)
 	}
-	return data
+	return data, nil
 }
 
-func (expr BinaryExpr) Interpret(environment Environment) any {
-	l := expr.leftExpr.Interpret(environment)
-	r := expr.rightExpr.Interpret(environment)
+func (expr BinaryExpr) Interpret(environment Environment) (any, error) {
+	l, err := expr.leftExpr.Interpret(environment)
+  if err != nil {
+    return nil, err
+  }
+	r, err := expr.rightExpr.Interpret(environment)
+  if err != nil {
+    return nil, err
+  }
 
 	switch expr.operator.Type {
-	case PLUS:
-		if leftInt, ok := l.(int64); ok {
-			if rightInt, ok := r.(int64); ok {
-				return leftInt + rightInt
-			}
-		}
-		return l.(float64) + r.(float64)
+  case PLUS:
+      switch left := l.(type) {
+      case int64:
+          switch right := r.(type) {
+          case int64:
+              return left + right, nil
+          case float64:
+              return float64(left) + right, nil
+          case string:
+              return fmt.Sprintf("%d%s", left, right), nil
+          default:
+              return nil, fmt.Errorf("Unsupported type for addition: Int + %T", right)
+          }
+      case float64:
+          switch right := r.(type) {
+          case int64:
+              return left + float64(right), nil
+          case float64:
+              return left + right, nil
+          case string:
+              return fmt.Sprintf("%f%s", left, right), nil
+          default:
+              return nil, fmt.Errorf("Unsupported type for addition: Float + %T", right)
+          }
+      case string:
+          switch right := r.(type) {
+          case int64:
+              return left + fmt.Sprintf("%d", right), nil
+          case float64:
+              return left + fmt.Sprintf("%f", right), nil
+          case string:
+              return left + right, nil
+          default:
+              return nil, fmt.Errorf("Unsupported type for addition: String + %T", right)
+          }
+      default:
+          return nil, fmt.Errorf("Unsupported type for addition: %T + %T", l, r)
+      }
 	case MINUS:
 		if leftInt, ok := l.(int64); ok {
 			if rightInt, ok := r.(int64); ok {
-				return leftInt - rightInt
+				return leftInt - rightInt, nil
 			}
 		}
-		return l.(float64) - r.(float64)
+		return l.(float64) - r.(float64), nil
 	case STAR:
 		if leftInt, ok := l.(int64); ok {
 			if rightInt, ok := r.(int64); ok {
-				return leftInt * rightInt
+				return leftInt * rightInt, nil
 			}
 		}
-		return l.(float64) * r.(float64)
+		return l.(float64) * r.(float64), nil
 	case SLASH:
 		if leftInt, ok := l.(int64); ok {
 			if rightInt, ok := r.(int64); ok {
-				return leftInt / rightInt
+				return leftInt / rightInt, nil
 			}
 		}
-		return l.(float64) / r.(float64)
+		return l.(float64) / r.(float64), nil
 	case PERCENT:
-		return l.(int64) % r.(int64)
+		return l.(int64) % r.(int64), nil
 	case EQUAL_EQ:
-		return l == r
+		return l == r, nil
 	case BANG_EQ:
-		return l != r
+		return l != r, nil
 	case GREATER:
 		if leftInt, ok := l.(int64); ok {
 			if rightInt, ok := r.(int64); ok {
-				return leftInt > rightInt
+				return leftInt > rightInt, nil
 			}
 		}
-		return l.(float64) > r.(float64)
+		return l.(float64) > r.(float64), nil
 	case GREATER_EQ:
 		if leftInt, ok := l.(int64); ok {
 			if rightInt, ok := r.(int64); ok {
-				return leftInt >= rightInt
+				return leftInt >= rightInt, nil
 			}
 		}
-		return l.(float64) >= r.(float64)
+		return l.(float64) >= r.(float64), nil
 	case LESS:
 		if leftInt, ok := l.(int64); ok {
 			if rightInt, ok := r.(int64); ok {
-				return leftInt < rightInt
+				return leftInt < rightInt, nil
 			}
 		}
-		return l.(float64) < r.(float64)
+		return l.(float64) < r.(float64), nil
 	case LESS_EQ:
 		if leftInt, ok := l.(int64); ok {
 			if rightInt, ok := r.(int64); ok {
-				return leftInt <= rightInt
+				return leftInt <= rightInt, nil
 			}
 		}
-		return l.(float64) <= r.(float64)
+		return l.(float64) <= r.(float64), nil
 	case BAR:
-		return l.(int64) | r.(int64)
+		return l.(int64) | r.(int64), nil
 	case BAR_BAR:
-		return l.(bool) || r.(bool)
+		return l.(bool) || r.(bool), nil
 	case AMP:
-		return l.(int64) & r.(int64)
+		return l.(int64) & r.(int64), nil
 	case AMP_AMP:
-		return l.(bool) && r.(bool)
+		return l.(bool) && r.(bool), nil
 	default:
-		return nil
+		return nil, fmt.Errorf("Invalid Binary Operator %v", expr.operator)
 	}
 }
 
-func (expr UnaryExpr) Interpret(environment Environment) any {
-	res := expr.expr.Interpret(environment)
+func (expr UnaryExpr) Interpret(environment Environment) (any, error) {
+	res, err := expr.expr.Interpret(environment)
+  if err != nil {
+    return nil, err
+  }
 	switch expr.operator.Type {
 	case BANG:
-		return !res.(bool)
+		if r, ok := res.(bool); ok {
+      return !r, nil
+    } 
+    return nil, fmt.Errorf("Expected Type bool, got %T", res)
 	case MINUS:
-		if _, ok := res.(int64); ok {
-			return -res.(int64)
+		if r, ok := res.(int64); ok {
+			return -r, nil
 		}
-		return -res.(float64)
+		if r, ok := res.(float64); ok {
+			return -r, nil
+		}
+    return nil, fmt.Errorf("Expected number, got %T", res)
 	default:
-		return nil
+		return nil, fmt.Errorf("Invalid Unary Operator %v", expr.operator.Type)
 	}
 }
 
-func (expr GroupingExpr) Interpret(environment Environment) any {
+func (expr GroupingExpr) Interpret(environment Environment) (any, error) {
 	return expr.expr.Interpret(environment)
 }
 
-func (expr LiteralExpr) Interpret(environment Environment) any {
+func (expr LiteralExpr) Interpret(environment Environment) (any, error) {
 	switch expr.value.Type {
 	case TRUE:
-		return true
+		return true, nil
 	case FALSE:
-		return false
+		return false, nil
 	case IDENTIFIER:
 		v, err := environment.findVar(expr.value.String())
 		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-			return nil
+      return nil, err
 		}
-		return v
+		return v, nil
 	default:
-		return expr.value.Value
+		return expr.value.Value, nil
 	}
 }
 
-func (expr InvalidExpr) Interpret(environment Environment) any {
-	return nil
-}
-
-func (expr BlockExpr) Interpret(environment Environment) any {
+func (expr BlockExpr) Interpret(environment Environment) (any, error) {
 	var res any
+  var err error
 	environment.push(make(map[string]any))
 	for _, expr := range expr.program {
-		res = expr.Interpret(environment)
+		res, err = expr.Interpret(environment)
+
+    if err != nil {
+      return nil, err
+    }
 	}
 	environment.pop()
-	return res
+	return res, nil
 }
 
-func (expr IfExpr) Interpret(environment Environment) any {
-	if expr.condition.Interpret(environment).(bool) {
+func (expr IfExpr) Interpret(environment Environment) (any, error) {
+  condVal, err := expr.condition.Interpret(environment)
+  if err != nil {
+    return nil, err 
+  }
+  if _, ok := condVal.(bool); !ok {
+    return nil, fmt.Errorf("Expected Type bool, got %T", condVal)
+  }
+
+	if condVal.(bool) {
 		return expr.thenBranch.Interpret(environment)
 	} else if expr.elseBranch != nil {
 		return expr.elseBranch.Interpret(environment)
 	}
 
-	return nil
+	return nil, nil
 }
 
-func (expr WhileExpr) Interpret(environment Environment) any {
-	for expr.condition.Interpret(environment).(bool) {
-		expr.loopBranch.Interpret(environment)
+func (expr WhileExpr) Interpret(environment Environment) (any, error) {
+  condVal, err := expr.condition.Interpret(environment)
+  if err != nil {
+    return nil, err
+  }
+  if _, ok := condVal.(bool); !ok {
+    return nil, fmt.Errorf("Expected Type bool, got %T", condVal)
+  }
+
+	for condVal.(bool) {
+		_, err := expr.loopBranch.Interpret(environment)
+    if err != nil {
+      return nil, err
+    }
+
+    condVal, err = expr.condition.Interpret(environment)
+    if err != nil {
+      return nil, err
+    }
+    if _, ok := condVal.(bool); !ok {
+      return nil, fmt.Errorf("Expected Type bool, got %T", condVal)
+    }
 	}
 
-	return nil
+	return nil, nil
 }
 
-func (expr CallExpr) Interpret(environment Environment) any {
+func (expr CallExpr) Interpret(environment Environment) (any, error) {
 	f, err := environment.findVar(expr.f.String())
 	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-		return nil
+		return nil, err
 	}
 
 	function, ok := f.(Function)
 	if !ok {
-		fmt.Println("Expected function")
-		os.Exit(1)
-		return nil
+		return nil, fmt.Errorf("Invalid Function %v", function)
 	}
 	args := []any{}
 
 	for _, arg := range expr.args {
-		args = append(args, arg.Interpret(environment))
+    a, err := arg.Interpret(environment)
+    if err != nil {
+      return nil, err
+    }
+		args = append(args, a)
 	}
-	value, err := function.Call(args)
+
+	value, err := function.Call(environment, args)
 	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-		return nil
+		return nil, err
 	}
-	return value
+
+	return value, nil
+}
+
+func (expr FnDeclExpr) Interpret(environment Environment) (any, error) {
+  f := Function {
+    Arity: len(expr.args),
+    Call: func(env Environment, args []any) (any, error) {
+      env.push(make(map[string]any))
+
+      if len(expr.args) != len(args) {
+        return nil, fmt.Errorf("[ERROR] Arity does not match at Function %v at Line %v", expr.name.Value, expr.name.Line)
+      }
+
+      for i := range args {
+        env.declareVar(expr.args[i].Value.(string), args[i])
+      }
+
+      result, err := expr.program.Interpret(env)
+      env.pop()
+      if err != nil {
+        return nil, err
+      }
+
+      return result, nil
+    },
+  }
+
+  environment.declareVar(expr.name.Value.(string), f)
+
+  return f, nil
 }

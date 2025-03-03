@@ -18,6 +18,7 @@ func init() {
 	KEYWORDS["return"] = RETURN
 	KEYWORDS["true"] = TRUE
 	KEYWORDS["false"] = FALSE
+  KEYWORDS["fn"] = FUNCTION
 }
 
 type Scanner struct {

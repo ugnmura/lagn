@@ -38,19 +38,22 @@ func (parser *Parser) expression() (Expr, error) {
 
 func (parser *Parser) controlFlow() (Expr, error) {
 	if parser.match(IF) {
-		return parser.ifStatement()
+		return parser.ifStmt()
 	}
 	if parser.match(WHILE) {
-		return parser.whileStatement()
+		return parser.whiteStmt()
 	}
 	if parser.match(FOR) {
-		return parser.forStatement()
+		return parser.forStmt()
 	}
+  if parser.match(FUNCTION) {
+    return parser.fnDeclStmt()
+  }
 
 	return parser.block()
 }
 
-func (parser *Parser) ifStatement() (Expr, error) {
+func (parser *Parser) ifStmt() (Expr, error) {
 	_, err := parser.consume(LEFT_PAREN, "Expect '(' after 'if'.")
 	if err != nil {
 		return nil, err
@@ -86,7 +89,7 @@ func (parser *Parser) ifStatement() (Expr, error) {
 	}, nil
 }
 
-func (parser *Parser) whileStatement() (Expr, error) {
+func (parser *Parser) whiteStmt() (Expr, error) {
 	_, err := parser.consume(LEFT_PAREN, "Expect '(' after 'while'.")
 	if err != nil {
 		return nil, err
@@ -109,11 +112,13 @@ func (parser *Parser) whileStatement() (Expr, error) {
 
 	return WhileExpr{
 		condition:  condition,
-		loopBranch: loopBranch,
+		loopBranch: BlockExpr{ 
+      program: []Expr{loopBranch},
+    },
 	}, nil
 }
 
-func (parser *Parser) forStatement() (Expr, error) {
+func (parser *Parser) forStmt() (Expr, error) {
 	_, err := parser.consume(LEFT_PAREN, "Expect '(' after 'for'.")
 	if err != nil {
 		return nil, err
@@ -162,6 +167,65 @@ func (parser *Parser) forStatement() (Expr, error) {
 			loopBranch: loopBranch,
 		}),
 	}, nil
+}
+
+func (parser *Parser) fnDeclStmt() (Expr, error) {
+  identifier, err := parser.consume(IDENTIFIER, "Expected Identifier after fn")
+  if err != nil {
+    return nil, err
+  }
+
+  _, err = parser.consume(LEFT_PAREN, "Expected ( after fnDecl")
+  if err != nil {
+    return nil, err
+  }
+
+  args, err := parser.finishArgs()
+  if err != nil {
+    return nil, err
+  }
+
+  program, err := parser.expression()
+  if err != nil {
+    return nil, err
+  }
+
+  return FnDeclExpr {
+    name: identifier,
+    args: args,
+    program: program,
+  }, nil
+}
+
+func (parser *Parser) finishArgs() ([]Token, error) {
+	var args []Token
+
+	if !parser.check(RIGHT_PAREN) {
+		if parser.isAtEnd() {
+			return nil, fmt.Errorf("Expected ')' after args")
+		}
+
+		arg, err := parser.consume(IDENTIFIER, "Expected Identifier after (")
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, arg)
+
+		for parser.match(COMMA) {
+			arg, err := parser.consume(IDENTIFIER, "Expcted Identifier after ,")
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, arg)
+		}
+	}
+
+	_, err := parser.consume(RIGHT_PAREN, "Expected ')' after args")
+  if err != nil {
+    return nil, err
+  }
+
+	return args, nil
 }
 
 func (parser *Parser) block() (Expr, error) {
@@ -380,12 +444,13 @@ func (parser *Parser) factor() (Expr, error) {
 
 func (parser *Parser) unary() (Expr, error) {
 	if parser.match(BANG, MINUS) {
+    operator := parser.tokens[parser.current-1]
 		expr, err := parser.call()
 		if err != nil {
 			return nil, err
 		}
 		return UnaryExpr{
-			operator: parser.tokens[parser.current-1],
+			operator: operator,
 			expr:     expr,
 		}, nil
 	}
@@ -423,7 +488,7 @@ func (parser *Parser) finishCall() ([]Expr, error) {
 
 	if !parser.check(RIGHT_PAREN) {
 		if parser.isAtEnd() {
-			return nil, fmt.Errorf("Expected ')' after call")
+			return nil, fmt.Errorf("Expected ')' after args")
 		}
 
 		arg, err := parser.expression()
@@ -441,7 +506,10 @@ func (parser *Parser) finishCall() ([]Expr, error) {
 		}
 	}
 
-	parser.consume(RIGHT_PAREN, "Expected ')' after call")
+	_, err := parser.consume(RIGHT_PAREN, "Expected ')' after args")
+  if err != nil {
+    return nil, err
+  }
 
 	return args, nil
 }
