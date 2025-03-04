@@ -73,6 +73,12 @@ func (scanner *Scanner) ScanToken() {
 		scanner.AddToken(LEFT_BRACE)
 	case rune('}'):
 		scanner.AddToken(RIGHT_BRACE)
+	case rune('['):
+		scanner.AddToken(LEFT_BRACKET)
+	case rune(']'):
+		scanner.AddToken(RIGHT_BRACKET)
+  case rune('#'):
+		scanner.AddToken(HASHTAG)
 	case rune('+'):
 		if scanner.PeekCurrent() == rune('=') {
 			scanner.Advance()

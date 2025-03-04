@@ -8,25 +8,24 @@ import (
 	"github.com/SushiWaUmai/lagn/core"
 )
 
-func run(line string, environment core.Environment) error {
+func run(line string, environment core.Environment) (any, error) {
 	scanner := core.CreateScanner(line)
 	scanner.ScanTokens()
 	parser := core.CreateParser(scanner.Tokens)
 	program, err := parser.Parse()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	var output any
 	for _, expr := range program {
 		output, err = expr.Interpret(environment)
     if err != nil {
-      return err
+      return nil, err
     }
 	}
-	fmt.Println(output)
 
-	return nil
+	return output, nil
 }
 
 func runFile() {
@@ -38,7 +37,7 @@ func runFile() {
 	}
 
 	environment := core.DefaultEnvironment()
-	err = run(string(content), environment)
+	_, err = run(string(content), environment)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -51,10 +50,13 @@ func runPrompt() {
 	fmt.Print("> ")
 	for bufScanner.Scan() {
 		line := bufScanner.Text()
-		err := run(line, environment)
+		output, err := run(line, environment)
 		if err != nil {
 			fmt.Println(err)
-		}
+		} else {
+      fmt.Println(output)
+    }
+
 		fmt.Print("> ")
 	}
 }

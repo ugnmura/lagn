@@ -7,5 +7,3 @@ for (a := 0; a < 100; a += 1) {
     n2 = n3
     print(n1)
 }
-
-"Done!"

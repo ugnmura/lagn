@@ -443,9 +443,9 @@ func (parser *Parser) factor() (Expr, error) {
 }
 
 func (parser *Parser) unary() (Expr, error) {
-	if parser.match(BANG, MINUS) {
+	if parser.match(BANG, MINUS, HASHTAG) {
     operator := parser.tokens[parser.current-1]
-		expr, err := parser.call()
+		expr, err := parser.index()
 		if err != nil {
 			return nil, err
 		}
@@ -455,11 +455,36 @@ func (parser *Parser) unary() (Expr, error) {
 		}, nil
 	}
 
-	expr, err := parser.call()
+	expr, err := parser.index()
 	if err != nil {
 		return nil, err
 	}
 	return expr, nil
+}
+
+func (parser *Parser) index() (Expr, error) {
+  expr, err := parser.call()
+  if err != nil {
+    return nil, err
+  }
+
+  if parser.match(LEFT_BRACKET) {
+    arg, err := parser.expression()
+    if err != nil {
+      return nil, err
+    }
+    _, err = parser.consume(RIGHT_BRACKET, "Expected ']' after index notation")
+    if err != nil {
+      return nil, err
+    }
+
+    return IndexExpr{
+      value: expr, 
+      index: arg,
+    }, nil
+  }
+
+  return expr, nil
 }
 
 func (parser *Parser) call() (Expr, error) {
@@ -520,6 +545,38 @@ func (parser *Parser) primary() (Expr, error) {
 			value: parser.tokens[parser.current-1],
 		}, nil
 	}
+
+  if parser.match(LEFT_BRACKET) {
+    var values []Expr
+    if !parser.check(RIGHT_BRACKET) {
+      if parser.isAtEnd() {
+        return nil, fmt.Errorf("Expected ']' after array initializer")
+      }
+
+      val, err := parser.expression()
+      if err != nil {
+        return nil, err
+      }
+      values = append(values, val)
+
+      for parser.match(COMMA) {
+        val, err := parser.expression()
+        if err != nil {
+          return nil, err
+        }
+        values = append(values, val)
+      }
+    }
+    
+    _, err := parser.consume(RIGHT_BRACKET, "Expected ']' after array initializer")
+    if err != nil {
+      return nil, err
+    }
+
+    return ArrayInitExpr {
+      values: values,
+    }, nil
+  }
 
 	if parser.match(LEFT_PAREN) {
 		expr, err := parser.expression()

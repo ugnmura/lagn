@@ -1,3 +1,1 @@
-for (a := 1; a <= 10; a+=1)
-  for (b := 1; b <= 10; b+=1)
-    p("Test")
+print("Hello, World")

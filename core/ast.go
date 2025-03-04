@@ -81,6 +81,17 @@ type FnDeclExpr struct {
   program Expr
 }
 
+type ArrayInitExpr struct {
+  Expr
+  values []Expr
+}
+
+type IndexExpr struct {
+  Expr
+	value Expr
+	index Expr
+}
+
 func (expr AssignExpr) String() string {
 	op := ""
 	if expr.operator.Type == COLON_EQ {
@@ -126,7 +137,7 @@ func (expr WhileExpr) String() string {
 	return res
 }
 func (expr CallExpr) String() string {
-	res := fmt.Sprintf("%s(", expr.f.String())
+	res := fmt.Sprintf("%v(", expr.f.String())
 	for i, arg := range expr.args {
 		if i > 0 {
 			res += ", "
@@ -137,7 +148,7 @@ func (expr CallExpr) String() string {
 	return res
 }
 func (expr FnDeclExpr) String() string {
-	res := fmt.Sprintf("%s = (", expr.name.String())
+	res := fmt.Sprintf("%v = (", expr.name.String())
 	for i, arg := range expr.args {
 		if i > 0 {
 			res += ", "
@@ -147,6 +158,20 @@ func (expr FnDeclExpr) String() string {
 	res += ") => \n"
   res += expr.program.String()
 	return res
+}
+func (expr ArrayInitExpr) String() string {
+	res := "["
+	for i, val := range expr.values {
+		if i > 0 {
+			res += ", "
+		}
+		res += val.String()
+	}
+	res += "]"
+	return res
+}
+func (expr IndexExpr) String() string {
+  return fmt.Sprintf("%v[%v]", expr.value.String(), expr.index.String())
 }
 
 func (expr AssignExpr) Interpret(environment Environment) (any, error) {
@@ -159,7 +184,7 @@ func (expr AssignExpr) Interpret(environment Environment) (any, error) {
 	} else if expr.operator.Type == EQUAL {
 		err := environment.setVar(expr.name.String(), data)
 		if err != nil {
-      return nil, fmt.Errorf("Invalid assignment operator: %s", expr.operator.Type)
+      return nil, err
 		}
 	} else {
 		return nil, fmt.Errorf("Invalid assignment operator: %s", expr.operator.Type)
@@ -303,6 +328,11 @@ func (expr UnaryExpr) Interpret(environment Environment) (any, error) {
 			return -r, nil
 		}
     return nil, fmt.Errorf("Expected number, got %T", res)
+  case HASHTAG:
+    if r, ok := res.([]any); ok {
+      return int64(len(r)), nil
+    }
+    return nil, fmt.Errorf("Expected Array, got %T", res)
 	default:
 		return nil, fmt.Errorf("Invalid Unary Operator %v", expr.operator.Type)
 	}
@@ -409,6 +439,10 @@ func (expr CallExpr) Interpret(environment Environment) (any, error) {
 		args = append(args, a)
 	}
 
+  if len(args) != function.Arity {
+    return nil, fmt.Errorf("[ERROR] Arity does not match at Function %v", expr.f.String())
+  }
+
 	value, err := function.Call(environment, args)
 	if err != nil {
 		return nil, err
@@ -422,10 +456,6 @@ func (expr FnDeclExpr) Interpret(environment Environment) (any, error) {
     Arity: len(expr.args),
     Call: func(env Environment, args []any) (any, error) {
       env.push(make(map[string]any))
-
-      if len(expr.args) != len(args) {
-        return nil, fmt.Errorf("[ERROR] Arity does not match at Function %v at Line %v", expr.name.Value, expr.name.Line)
-      }
 
       for i := range args {
         env.declareVar(expr.args[i].Value.(string), args[i])
@@ -444,4 +474,37 @@ func (expr FnDeclExpr) Interpret(environment Environment) (any, error) {
   environment.declareVar(expr.name.Value.(string), f)
 
   return f, nil
+}
+
+func (expr ArrayInitExpr) Interpret(environment Environment) (any, error) {
+  var res []any
+  for _, val := range expr.values {
+    val, err := val.Interpret(environment)
+    if err != nil {
+      return nil, err
+    }
+    res = append(res, val)
+  }
+
+  return res, nil
+}
+
+func (expr IndexExpr) Interpret(environment Environment) (any, error) {
+  valAny, err := expr.value.Interpret(environment)
+  if err != nil {
+    return nil, err
+  }
+
+  val, ok := valAny.([]any)
+  if !ok {
+    return nil, fmt.Errorf("Expcted type [] found %T", valAny)
+  }
+
+  iAny, err := expr.index.Interpret(environment)
+  i, ok := iAny.(int64)
+  if !ok {
+    return nil, fmt.Errorf("Expected type i64 found %T", iAny)
+  }
+
+  return val[i], nil
 }
